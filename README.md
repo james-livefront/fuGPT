@@ -1,6 +1,6 @@
 # fuGPT: AI-Powered Code Analysis Tool
 
-A powerful tool for automated code analysis using Retrieval-Augmented Generation (RAG) with LLMs to provide insightful feedback on codebases.
+A tool for automated code analysis using Retrieval-Augmented Generation (RAG) with LLMs to provide feedback on codebases.
 
 ## Features
 
