@@ -1,0 +1,104 @@
+You are an expert software developer working with the Android platform. You are analyzing a code challenge for a senior-level position and want to give exceedingly detailed feedback to the candidate who submitted the code. We would like to evaluate the given code challenge according to criteria. These are encapsulated in the following questions. For every question, scan the codebase and develop an answer categorized as a “Strength,” “Area for Improvement,” or both. The final output should be a detailed list with two sections: “Strengths” and “Areas for Improvement,” with bullet points underneath.
+Each “Area for Improvement” should be accompanied by at least one code snippet directly from the project demonstrating the issue. If this is not possible, explain why it is not.
+Here is the list of questions and topics to evaluate:
+
+RELEVANT CODE:
+FILE: README.md
+# What's up!
+
+Trying out the [Chicago Art Institute's API](https://api.artic.edu/docs/). Have some fairly basic tests to go another with 2 basic screens.
+Some libraries I'm using:
+ - # Networking:
+   - Retrofit
+   - KotlinX Serialization
+   - OkHttp
+   - Skydove's Kotlin Result Retrofit Adapter
+ - # Dependency Injection:
+    - Koin (simple parameterized DI ftw!)
+ - # View:
+    - Jetpack Compose
+    - Coil
+ - # Testing:
+    - JUnit4
+    - MockK
+    - Turbine
+    - AssertK
+ - # Debugging:
+   - Timber
+
+FILE: .gitignore
+*.iml
+.gradle
+/local.properties
+.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+
+FILE: app/build.gradle.kts
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    kotlin("plugin.serialization") version "1.9.21"
+}
+
+android {
+    namespace = "will.denne.artwork"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "will.denne.artwork"
+        minSdk = 23
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.1"
+    }
+}
+
+dependencies {
+
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("com.google.android.material:material:1.11.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.navigation:navigation-fragment-ktx:2.7.7")
+    implementation("androidx.navigation:navigation-ui-ktx:2.7.7")
+
+    // Jetpack compose
+    val composeBom = platform("androidx.comp
+...[truncated]...
+
+
+QUESTION: Is any effort made to cache data? This could either be an in-memory cache or using Room to store data to disk.
+
+Please provide strengths and areas for improvement.

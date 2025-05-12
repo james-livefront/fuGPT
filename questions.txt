@@ -1,0 +1,97 @@
+Is there good documentation?
+Is there a good README?
+Does the app require a unique setup to run? If so, is it documented in the README?
+Does it contain information about what is being built for the challenge and outline key dependencies, choices made, and future work?
+Is the README well-formatted?
+Are they complete sentences, not just a series of bullet points?
+Is there code-level documentation for non-private interfaces, classes, functions, and properties?
+Are there any grammar or spelling issues?
+Does the project code follow a standard architecture, e.g., MVVM?
+How is the data modeling?
+Ideally, models that map to JSON would be explicit about how each class property maps to a JSON property, e.g., by using @JsonName when using kotlinx.serialization.
+Are they using data classes rather than normal classes? It would be incorrect if data classes were not used.
+Are there different models for different layers? Separate models for network requests and UI/repository layers are preferred, though not required.
+Is property nullability correctly specified? Are specific properties that should always be present, e.g., Ids, marked as optional?
+Are there clearly defined and separated layers, e.g., logic, networking, UI, and persistence?
+Is the code written in a testable way?
+For example, is dependency injection used? Extra points for using Hilt.
+Are any global singletons accessed directly in the ViewModels or Compose layer? If so, that would be bad.
+Is the code style consistent? Does it adhere to the best practices outlined in https://kotlinlang.org/docs/coding-conventions.html?
+Are classes, variables, and methods named appropriately?
+Does it include uses of Kotlin that indicate an understanding of more advanced features? This would include things like using the following:
+Higher-order function parameters
+Extension functions
+Functions with generic types
+Helper functions like apply, let, etc.
+Are the uses of advanced Kotlin features appropriate and not excessive?
+Would you describe their Kotlin coding style as idiomatic?
+Are there boilerplate methods from IDE templates left in the code?
+Is there any commented-out code?
+Are the following UI-specific features handled correctly?
+Does the app support dark mode?
+This can be inferred by using an overall theme that allows for both light and dark color palettes to be specified, along with some logic to decide when either palette should be used.
+Does the app properly support landscape mode?
+This typically entails ensuring that both screens have scrollable content or landscape-specific layouts.
+Do images load smoothly without introducing instantaneous jumps?
+This can be inferred by checking whether images are given some fixed size rather than deriving their size from the loaded image.
+Is there any way to reload data in cases of errors or stale data? A reload button or a swipe-to-refresh widget could do this.
+This is not required but it is nice to see.
+Does the app handle state saving and restoration properly?
+This can be inferred by how the detail screen fetches data. It might not correctly handle state restoration if it comes from somewhere in memory. If it is based on parameters passed through the OS-level navigation framework via some kind of Bundle or navigation arguments, then it might be handling it properly.
+Assuming the use of MVVM, how do the ViewModels expose the current state?
+The ideal case is that the current total state is modeled with some kind of data/sealed class and exposed as a single StateFlow (or Compose equivalent).
+Assuming the use of MVVM, does each screen have its own ViewModel?
+A shared ViewModel between screens should be used in very rare instances.
+An injectable object should be used in each ViewModel if shared behavior is desired between ViewModels.
+What is used for asynchronous work?
+Is it RxJava, coroutines, or basic callbacks? Whatever is chosen, is it done idiomatically and avoids bugs?
+Highlight the use of coroutines as a specific strength.
+If the app uses coroutines, does it include unnecessary usages of withContext?
+An example of an unnecessary usage is calling “withContext” to wrap code already suspending, like a network request. “withContext” should only be used to wrap non-suspending blocking code that needs to be made suspending. It would be a mistake to overuse withContext.
+If the app uses coroutines, does it ever mark a function returning a Flow as suspending?
+Typically, functions that return Flows can be made non-suspending and are a red flag.
+Does the app use Jetpack Compose for the UI?
+Compose is not required but would be preferred.
+If it uses Jetpack Compose, does it include Compose previews?
+This would be preferred, though not required.
+If it uses Jetpack Compose, are there any obvious problems that might lead to excessive recompositions?
+In particular, does the detail screen load its data while avoiding any potential infinite recomposition loops?
+Do the list and detail screens reload their data whenever a configuration changes? If so, flag that as a problem.
+If it uses Jetpack Navigation Compose, does it attempt to handle the routes in a type-safe way?
+This would involve wrapping any string-based routes with helpers like navigateToSomeDestination, which can be called without knowing the details of the routes elsewhere in the app.
+If it uses Jetpack Navigation Compose, does it handle navigating between screens without passing through a NavController to each screen?
+The best solution would be to provide callback functions that invoke a NavController at the highest level of the NavHost or sub-graph.
+Are mutable types exposed incorrectly?
+For example, a MutableStateFlow should not be exposed from a ViewModel or Repository / data-layer class.
+Are loading states handled well?
+Is there a state from the ViewModel layer that indicates when data is loading, and is there a corresponding UI state displayed for this state?
+Are errors handled well?
+ViewModels should not have to catch exceptions. If they do, that would be bad.
+No functions should throw exceptions except for the networking layer, and any cases that do should be flagged as bad.
+Are results from the repository layer represented as a sealed class or Kotlin Result class that clearly models success vs errors?
+Is there any UI that is displayed when there are errors?
+Do try/catch blocks wrap only the required lines? Wrapping a large number of lines of code should be avoided.
+How specific are the exceptions being caught? Catching general exceptions like Exception or RuntimeException can hide unexpected errors.
+Are there any obvious ways the app could crash?
+This would include calling functions that throw exceptions that are not caught. This often happens when network requests made by Retrofit are not inspected for errors anywhere along the call chain. Potential crashes would be very bad.
+Are CoroutineDispatchers injected into any data layers where necessary?
+It would be incorrect to access Dispatchers statically within the data layer.
+How are the unit tests?
+Are there unit tests? These would either be found in an “app/src/test” folder or an “app/src/androidTest” folder.
+Do unit tests properly mock/fake any networking calls? It would be incorrect to make actual network requests in the tests.
+Do unit tests mock/fake calls to any other dependencies of the layer being tested? It would be incorrect to test multiple layers at once.
+Do the tests focus on error and edge cases or happy paths? The names of the tests typically indicate these. Failure to test both success and error cases would be incorrect.
+Do the tests cover multiple app layers, such as the ViewModel and data layers? Failure to test at least these two types of layers would be incorrect.
+Are there any unnecessary tests, such as tests of data classes? This would be incorrect.
+Are coroutine dispatchers properly mocked with a test CoroutineDispatchers? It would be incorrect to leave the Main dispatchers unmocked in a test of a ViewModel. It would be incorrect to leave other Dispatchers unmocked in tests of the data layer.
+Are there more CoroutineScopes used than are required? Ideally, each test would only need a single CoroutineScope (typically covered by the inclusion of “runTest”). At most tests, we would need a second scope to collect Flow emissions in a way that would not block the test itself.
+Are strings and other UI resources correctly handled?
+Are all strings pulled from the strings.xml file? Using hardcoded strings is incorrect.
+Are all images either vector drawables or present in each supported density drawable folder?
+Is there a .gitignore file that contains commonly ignored Android project files (e.g., the .idea and build folders)?
+Is logging correctly handled?
+Uses of DLog should be avoided. This will prevent unit tests from running.
+A third-party library, like Timber, should be used.
+Throwable.printStackTrace and println should never be called as these cannot be configured to suppress output in production applications.
+Is dependency versioning done in a modern way? For example, is a libs.versions.toml file used? Or are dependency names and versions hardcoded in each build.gradle file.
+Is any effort made to cache data? This could either be an in-memory cache or using Room to store data to disk.

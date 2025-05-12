@@ -1,0 +1,25 @@
+flowchart TD
+    A[Start] --> B[Connect to Database]
+    B --> C[Read System Prompt]
+    C --> D[Read Questions]
+    D --> E[Process Questions Loop]
+    
+    E --> F[Get Relevant Code]
+    F --> G[Combine System Prompt + Code + Question]
+    G --> H[Save to Temporary File]
+    H --> I[Execute LLM Query]
+    I --> J[Save Answer to File]
+    J --> K{More Questions?}
+    
+    K -->|Yes| E
+    K -->|No| L[Combine All Answers]
+    L --> M[Save Final Report]
+    M --> N[End]
+    
+    subgraph "For Each Question"
+        F
+        G
+        H
+        I
+        J
+    end
