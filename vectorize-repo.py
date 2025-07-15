@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+from typing import Any, Callable
 
 import gitignore_parser
 
@@ -35,6 +36,13 @@ CHUNK_TARGET_NODE_TYPES = {
     "javascript": ["function_declaration", "class_declaration", "method_definition"],
     "java": ["method_declaration", "class_declaration", "constructor_declaration"],
     "cpp": ["function_definition", "class_specifier", "constructor_definition"],
+    "kotlin": [
+        "function_declaration",
+        "class_declaration",
+        "object_declaration",
+        "property_declaration",
+        "companion_object",
+    ],
     # Add more languages and their respective node types
 }
 
@@ -43,7 +51,7 @@ CHUNK_TARGET_NODE_TYPES = {
 LANGUAGE_GRAMMARS = {}
 
 
-def initialize_grammars():
+def initialize_grammars() -> None:
     """Dynamically loads available tree-sitter grammars."""
     global LANGUAGE_GRAMMARS
     try:
@@ -79,26 +87,38 @@ def initialize_grammars():
         LANGUAGE_GRAMMARS[".cc"] = (Language(tree_sitter_cpp.language()), "cpp")
     except ImportError:
         print("Warning: tree-sitter-cpp grammar not found.")
+    try:
+        import tree_sitter_kotlin
+
+        LANGUAGE_GRAMMARS[".kt"] = (Language(tree_sitter_kotlin.language()), "kotlin")
+        LANGUAGE_GRAMMARS[".kts"] = (
+            Language(tree_sitter_kotlin.language()),
+            "kotlin",
+        )  # Kotlin scripts
+    except ImportError:
+        print("Warning: tree-sitter-kotlin grammar not found.")
     # Add more languages here
 
 
 # Function to clone a GitHub repository
-def clone_repo(repo_url, target_dir):
+def clone_repo(repo_url: str, target_dir: str) -> None:
     print(f"Cloning repository {repo_url} to {target_dir}...")
     subprocess.run(["git", "clone", repo_url, target_dir], check=True)
     print("Repository cloned successfully.")
 
 
 # Function to check if path should be included (not in .gitignore)
-def get_gitignore_checker(repo_path):
+def get_gitignore_checker(repo_path: str) -> Callable[[str], bool]:
     gitignore_path = os.path.join(repo_path, ".gitignore")
     if os.path.exists(gitignore_path):
-        return gitignore_parser.parse_gitignore(gitignore_path)
+        return gitignore_parser.parse_gitignore(gitignore_path)  # type: ignore[no-any-return]
     return lambda x: False  # If no .gitignore, don't ignore anything
 
 
 # Function to extract AST-based chunks from code
-def extract_ast_chunks(code_content, parser, language_name):
+def extract_ast_chunks(
+    code_content: str, parser: Parser, language_name: str
+) -> list[dict[str, Any]]:
     chunks = []
     try:
         tree = parser.parse(bytes(code_content, "utf8"))
@@ -179,7 +199,7 @@ def extract_ast_chunks(code_content, parser, language_name):
     return chunks
 
 
-def main():
+def main() -> None:
     initialize_grammars()
     if not LANGUAGE_GRAMMARS:
         print(
