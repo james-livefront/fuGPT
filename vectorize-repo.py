@@ -7,6 +7,7 @@ for an AI-Powered Code Analysis Tool.
 """
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -22,6 +23,22 @@ from tree_sitter import Language, Parser
 # Load environment variables from .env file
 load_dotenv()
 
+
+# Define supported non-code file extensions and their types
+NON_CODE_FILE_TYPES = {
+    ".md": "markdown",
+    ".markdown": "markdown", 
+    ".txt": "text",
+    ".rst": "text",
+    ".json": "json",
+    ".yaml": "text",
+    ".yml": "text",
+    ".toml": "text",
+    ".cfg": "text",
+    ".ini": "text",
+    ".conf": "text",
+    ".log": "text",
+}
 
 # Define AST node types for chunking for different languages
 CHUNK_TARGET_NODE_TYPES = {
@@ -185,13 +202,154 @@ def extract_ast_chunks(
     return chunks
 
 
+def extract_markdown_chunks(content: str) -> list[dict[str, Any]]:
+    """Extract chunks from markdown files based on headers and sections."""
+    chunks = []
+    lines = content.split('\n')
+    
+    # Track current section
+    current_section = ""
+    current_content = []
+    current_start_line = 1
+    current_start_byte = 0
+    current_byte_pos = 0
+    
+    for line_num, line in enumerate(lines, 1):
+        line_bytes = len(line.encode('utf-8')) + 1  # +1 for newline
+        
+        # Check if this is a header line (starts with #)
+        if line.strip().startswith('#'):
+            # Save previous section if it has content
+            if current_content and any(l.strip() for l in current_content):
+                section_text = '\n'.join(current_content).strip()
+                if section_text:
+                    chunks.append({
+                        "code": section_text,
+                        "start_line": current_start_line,
+                        "end_line": line_num - 1,
+                        "start_byte": current_start_byte,
+                        "end_byte": current_byte_pos - 1,
+                        "node_type": "markdown_section",
+                        "section_title": current_section
+                    })
+            
+            # Start new section
+            current_section = line.strip()
+            current_content = [line]
+            current_start_line = line_num
+            current_start_byte = current_byte_pos
+        else:
+            current_content.append(line)
+        
+        current_byte_pos += line_bytes
+    
+    # Add final section
+    if current_content and any(l.strip() for l in current_content):
+        section_text = '\n'.join(current_content).strip()
+        if section_text:
+            chunks.append({
+                "code": section_text,
+                "start_line": current_start_line,
+                "end_line": len(lines),
+                "start_byte": current_start_byte,
+                "end_byte": current_byte_pos,
+                "node_type": "markdown_section",
+                "section_title": current_section
+            })
+    
+    # If no sections found, treat as single chunk
+    if not chunks and content.strip():
+        chunks.append({
+            "code": content,
+            "start_line": 1,
+            "end_line": content.count("\n") + 1,
+            "start_byte": 0,
+            "end_byte": len(bytes(content, "utf8")),
+            "node_type": "markdown_file"
+        })
+    
+    return chunks
+
+
+def extract_text_chunks(content: str) -> list[dict[str, Any]]:
+    """Extract chunks from text files based on paragraphs and sections."""
+    chunks = []
+    
+    # Split by double newlines (paragraph breaks)
+    paragraphs = re.split(r'\n\s*\n', content)
+    
+    current_byte_pos = 0
+    current_line = 1
+    
+    for paragraph in paragraphs:
+        if not paragraph.strip():
+            current_byte_pos += len(paragraph.encode('utf-8'))
+            current_line += paragraph.count('\n')
+            continue
+            
+        paragraph_lines = paragraph.count('\n') + 1
+        paragraph_bytes = len(paragraph.encode('utf-8'))
+        
+        chunks.append({
+            "code": paragraph.strip(),
+            "start_line": current_line,
+            "end_line": current_line + paragraph_lines - 1,
+            "start_byte": current_byte_pos,
+            "end_byte": current_byte_pos + paragraph_bytes,
+            "node_type": "text_paragraph"
+        })
+        
+        current_byte_pos += paragraph_bytes + 2  # +2 for double newline separator
+        current_line += paragraph_lines + 1  # +1 for paragraph break
+    
+    # If no paragraphs found, treat as single chunk
+    if not chunks and content.strip():
+        chunks.append({
+            "code": content,
+            "start_line": 1,
+            "end_line": content.count("\n") + 1,
+            "start_byte": 0,
+            "end_byte": len(bytes(content, "utf8")),
+            "node_type": "text_file"
+        })
+    
+    return chunks
+
+
+def extract_json_chunks(content: str) -> list[dict[str, Any]]:
+    """Extract chunks from JSON files - treat as single unit."""
+    return [{
+        "code": content,
+        "start_line": 1,
+        "end_line": content.count("\n") + 1,
+        "start_byte": 0,
+        "end_byte": len(bytes(content, "utf8")),
+        "node_type": "json_file"
+    }]
+
+
+def extract_non_code_chunks(content: str, file_type: str) -> list[dict[str, Any]]:
+    """Extract chunks from non-code files based on file type."""
+    if file_type == "markdown":
+        return extract_markdown_chunks(content)
+    elif file_type == "json":
+        return extract_json_chunks(content)
+    else:  # text files and others
+        return extract_text_chunks(content)
+
+
 def main() -> None:
     initialize_grammars()
-    if not LANGUAGE_GRAMMARS:
+    if not LANGUAGE_GRAMMARS and not NON_CODE_FILE_TYPES:
         print(
-            "Error: No tree-sitter grammars loaded. Please install them (e.g., pip install tree-sitter-python). Exiting."
+            "Error: No file processing capabilities loaded. Please install tree-sitter grammars (e.g., pip install tree-sitter-python). Exiting."
         )
         return
+    
+    if not LANGUAGE_GRAMMARS:
+        print("Warning: No tree-sitter grammars loaded. Only non-code files will be processed.")
+    
+    print(f"Loaded support for {len(LANGUAGE_GRAMMARS)} code file types and {len(NON_CODE_FILE_TYPES)} non-code file types.")
 
     db_path = "repo-embeddings.db"
     hnsw_index_path = "repo-embeddings.hnsw"
@@ -255,13 +413,22 @@ def main() -> None:
                     continue
 
                 file_ext = os.path.splitext(file)[1].lower()
-                if file_ext not in LANGUAGE_GRAMMARS:
+                
+                # Check if it's a code file with tree-sitter support
+                if file_ext in LANGUAGE_GRAMMARS:
+                    lang_obj, lang_name = LANGUAGE_GRAMMARS[file_ext]
+                    parser = Parser()
+                    parser.language = lang_obj
+                    is_code_file = True
+                # Check if it's a supported non-code file
+                elif file_ext in NON_CODE_FILE_TYPES:
+                    file_type = NON_CODE_FILE_TYPES[file_ext]
+                    lang_name = file_type
+                    is_code_file = False
+                else:
+                    # Skip unsupported file types
                     # print(f"Skipping file with unsupported extension: {relative_path}")
                     continue
-
-                lang_obj, lang_name = LANGUAGE_GRAMMARS[file_ext]
-                parser = Parser()
-                parser.language = lang_obj
 
                 try:
                     with open(file_path_abs, encoding="utf-8") as f:
@@ -270,11 +437,13 @@ def main() -> None:
                     if not content.strip():  # Skip empty files
                         continue
 
-                    extracted_code_chunks = extract_ast_chunks(
-                        content, parser, lang_name
-                    )
+                    # Extract chunks based on file type
+                    if is_code_file:
+                        extracted_chunks = extract_ast_chunks(content, parser, lang_name)
+                    else:
+                        extracted_chunks = extract_non_code_chunks(content, file_type)
 
-                    for chunk_info in extracted_code_chunks:
+                    for chunk_info in extracted_chunks:
                         chunk_id = f"{relative_path}:{chunk_info['start_byte']}:{chunk_info['end_byte']}"
                         chunk_data_for_db = {
                             "id": chunk_id,

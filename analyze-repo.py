@@ -11,6 +11,9 @@ import subprocess
 import tempfile
 import time
 
+# Set tokenizers parallelism to avoid warnings when forking
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 # HNSWlib import (assuming it will be installed in the target environment)
 import hnswlib
 import llm
@@ -38,7 +41,7 @@ RERANKER_MODEL_NAME = (
 
 # HyDE configuration
 USE_HYDE = True  # Set to False to disable HyDE
-HYDE_LLM_MODEL_ID = "gpt-3.5-turbo-instruct"  # A fast LLM for generating hypothetical documents (if using llm cli)
+HYDE_LLM_MODEL_ID = "gpt-4o-mini"  # A fast OpenAI LLM for generating hypothetical documents
 # Or use a specific llm library model if not using shell command for HyDE
 
 # Retrieval parameters
@@ -216,7 +219,7 @@ def get_relevant_chunks(query):
         sorted(range(len(bm25_scores)), key=lambda i: bm25_scores[i], reverse=True)[
             :BM25_TOP_K
         ]
-        if bm25_scores
+        if len(bm25_scores) > 0
         else []
     )
     bm25_results_embedding_ids = [
@@ -317,9 +320,9 @@ def ask_about_codebase(question, aspect_for_retrieval):
     output_file_path = f"answer_{sanitized_question}.md"
 
     # Execute the LLM query using shell command (as in original script)
-    # Ensure the LLM model used here is powerful enough for analysis (e.g. deepseek-coder-v2)
+    # Ensure the LLM model used here is powerful enough for analysis
     llm_model_for_analysis = (
-        "deepseek-coder-v2:latest"  # Or user's preferred model via llm CLI
+        "gpt-4o"  # Using OpenAI's GPT-4 for analysis
     )
     print(f"Asking LLM ({llm_model_for_analysis}): {question[:60]}...")
     shell_cmd = (
