@@ -177,6 +177,10 @@ cython_debug/
 repo-embeddings.db
 repo-embeddings.hnsw
 temp_query.txt
+temp_*.txt
 answer_*.md
 final_code_evaluation.md
 .DS_Store
+node_modules/
+questions.txt
+system-prompt.txt
