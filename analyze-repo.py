@@ -257,6 +257,21 @@ def get_relevant_chunks(query):
             [query, chunk["code"]] for chunk in candidate_chunks_for_reranking
         ]
         rerank_scores = reranker_model.predict(rerank_pairs)
+        
+        # Apply heuristic boosts for documentation queries
+        documentation_keywords = ["readme", "documentation", "docs", "setup", "install", "getting started"]
+        if any(keyword in query.lower() for keyword in documentation_keywords):
+            for i, chunk in enumerate(candidate_chunks_for_reranking):
+                # Boost README and other documentation files
+                if chunk["file_path"].lower() in ["readme.md", "readme.txt", "docs.md"] or \
+                   chunk["language"] == "markdown" or \
+                   "readme" in chunk["file_path"].lower():
+                    rerank_scores[i] += 2.0  # Significant boost for documentation files
+                    print(f"Boosted documentation file: {chunk['file_path']}")
+                # Boost other common documentation patterns
+                elif chunk["file_path"].lower().endswith((".md", ".txt", ".rst")) and \
+                     any(doc_word in chunk["file_path"].lower() for doc_word in ["doc", "guide", "help", "install"]):
+                    rerank_scores[i] += 1.0  # Moderate boost for other doc files
 
         # Sort chunks by reranker scores
         reranked_chunks_with_scores = list(
