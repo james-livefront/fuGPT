@@ -13,24 +13,17 @@ import tempfile
 from typing import Any, Callable
 
 import gitignore_parser
-
-# HNSWlib import (assuming it will be installed in the target environment)
 import hnswlib
 import llm
 import sqlite_utils
-
-# Tree-sitter imports
+from dotenv import load_dotenv
 from tree_sitter import Language, Parser
 
-# Assuming tree-sitter grammars are installed as separate packages
-# e.g., tree_sitter_python, tree_sitter_javascript, etc.
-# We will dynamically load them based on file extension.
+# Load environment variables from .env file
+load_dotenv()
 
 
-# Configuration for tree-sitter and chunking
 # Define AST node types for chunking for different languages
-# This is a simplified example; a more robust solution would have a more comprehensive list
-# and potentially a way to configure this externally.
 CHUNK_TARGET_NODE_TYPES = {
     "python": ["function_definition", "class_definition"],
     "javascript": ["function_declaration", "class_declaration", "method_definition"],
@@ -52,7 +45,6 @@ LANGUAGE_GRAMMARS = {}
 
 
 def initialize_grammars() -> None:
-    """Dynamically loads available tree-sitter grammars."""
     global LANGUAGE_GRAMMARS
     try:
         import tree_sitter_python
@@ -94,20 +86,18 @@ def initialize_grammars() -> None:
         LANGUAGE_GRAMMARS[".kts"] = (
             Language(tree_sitter_kotlin.language()),
             "kotlin",
-        )  # Kotlin scripts
+        )
     except ImportError:
         print("Warning: tree-sitter-kotlin grammar not found.")
     # Add more languages here
 
 
-# Function to clone a GitHub repository
 def clone_repo(repo_url: str, target_dir: str) -> None:
     print(f"Cloning repository {repo_url} to {target_dir}...")
     subprocess.run(["git", "clone", repo_url, target_dir], check=True)
     print("Repository cloned successfully.")
 
 
-# Function to check if path should be included (not in .gitignore)
 def get_gitignore_checker(repo_path: str) -> Callable[[str], bool]:
     gitignore_path = os.path.join(repo_path, ".gitignore")
     if os.path.exists(gitignore_path):
@@ -115,7 +105,6 @@ def get_gitignore_checker(repo_path: str) -> Callable[[str], bool]:
     return lambda x: False  # If no .gitignore, don't ignore anything
 
 
-# Function to extract AST-based chunks from code
 def extract_ast_chunks(
     code_content: str, parser: Parser, language_name: str
 ) -> list[dict[str, Any]]:
@@ -169,9 +158,7 @@ def extract_ast_chunks(
             for child in node.children:
                 queue.append(child)
 
-        if (
-            not chunks and code_content.strip()
-        ):  # If no target nodes found, but file has content
+        if not chunks and code_content.strip():
             chunks.append(
                 {
                     "code": code_content,
@@ -185,7 +172,6 @@ def extract_ast_chunks(
 
     except Exception as e:
         print(f"Error parsing or chunking code for language {language_name}: {e}")
-        # Fallback: add the whole file content as a single chunk
         chunks.append(
             {
                 "code": code_content,
@@ -207,12 +193,10 @@ def main() -> None:
         )
         return
 
-    # Database and HNSWlib setup
     db_path = "repo-embeddings.db"
     hnsw_index_path = "repo-embeddings.hnsw"
 
     db = sqlite_utils.Database(db_path)
-    # The 'chunks' table will store metadata and the actual code chunk
     # Embeddings will be in HNSWlib, IDs will link them.
     if "chunks" in db.table_names():
         db["chunks"].drop()
@@ -232,20 +216,16 @@ def main() -> None:
         pk="id",
     )
 
-    # Embedding model setup (using llm library as in original)
-    # Ensure the model_id is appropriate for code embeddings
     model_id = "text-embedding-3-small"  # OpenAI embedding model
     # model_id = "jina-embeddings-v2-base-en" # Alternative if available
     embed_model = llm.get_embedding_model(model_id)
     embedding_dim = None  # We'll get this after the first embedding
 
-    # HNSWlib index setup (will be initialized after knowing embedding_dim)
     hnsw_index = None
     max_elements = 100000  # Initial capacity, can be resized
     hnsw_ef_construction = 200
     hnsw_M = 16
 
-    # Temporary directory for cloning
     temp_dir = tempfile.mkdtemp()
     try:
         repo_url = input("Enter GitHub repository URL to vectorize: ")
@@ -281,7 +261,7 @@ def main() -> None:
 
                 lang_obj, lang_name = LANGUAGE_GRAMMARS[file_ext]
                 parser = Parser()
-                parser.set_language(lang_obj)
+                parser.language = lang_obj
 
                 try:
                     with open(file_path_abs, encoding="utf-8") as f:
@@ -296,7 +276,6 @@ def main() -> None:
 
                     for chunk_info in extracted_code_chunks:
                         chunk_id = f"{relative_path}:{chunk_info['start_byte']}:{chunk_info['end_byte']}"
-                        # Prepare data for SQLite and for embedding
                         chunk_data_for_db = {
                             "id": chunk_id,
                             "file_path": relative_path,
@@ -323,13 +302,11 @@ def main() -> None:
             print("No code chunks found to embed. Exiting.")
             return
 
-        # Get embedding dimension from the first chunk
         first_chunk_code = all_chunks_to_embed_with_metadata[0]["code"]
         first_embedding = list(embed_model.embed(first_chunk_code))
         embedding_dim = len(first_embedding)
         print(f"Detected embedding dimension: {embedding_dim}")
 
-        # Initialize HNSWlib index now that we have the dimension
         hnsw_index = hnswlib.Index(space="cosine", dim=embedding_dim)
         hnsw_index.init_index(
             max_elements=max(len(all_chunks_to_embed_with_metadata), 1),
@@ -338,7 +315,6 @@ def main() -> None:
         )
         hnsw_index.set_num_threads(4)  # Use 4 threads for indexing
 
-        # Embed and store chunks
         print(f"Embedding {len(all_chunks_to_embed_with_metadata)} chunks...")
         embeddings_for_hnsw = []
         ids_for_hnsw = []
