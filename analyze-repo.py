@@ -314,12 +314,12 @@ def ask_about_codebase(question, aspect_for_retrieval):
         context_str = "\n".join(context_items)
 
     # Read the system prompt
-    # Assuming system-prompt.txt is in the same directory
+    # Load system prompt from config directory
     try:
-        with open("system-prompt.txt", encoding="utf-8") as f:
+        with open("config/system-prompt.txt", encoding="utf-8") as f:
             system_prompt = f.read().strip()
     except FileNotFoundError:
-        print("Warning: system-prompt.txt not found. Using a default prompt.")
+        print("Warning: config/system-prompt.txt not found. Using a default prompt.")
         system_prompt = "You are a helpful AI assistant. Analyze the provided code context to answer the question."
 
     prompt = f"{system_prompt}\n\nRELEVANT CODE CONTEXT:\n{context_str}\n\nQUESTION: {question}\n\nPlease provide strengths and areas for improvement based on the code context and question."
@@ -332,7 +332,9 @@ def ask_about_codebase(question, aspect_for_retrieval):
     sanitized_question = (
         re.sub(r"[^\w\s]", "", question[:40]).strip().replace(" ", "_").lower()
     )
-    output_file_path = f"answer_{sanitized_question}.md"
+    # Ensure outputs directory exists
+    os.makedirs("outputs", exist_ok=True)
+    output_file_path = f"outputs/answer_{sanitized_question}.md"
 
     # Execute the LLM query using shell command (as in original script)
     # Ensure the LLM model used here is powerful enough for analysis
@@ -368,17 +370,16 @@ def main():
         print(f"Failed to initialize. Exiting. Error: {e}")
         return
 
-    # Read questions (as in original script)
-    # Assuming questions.txt is in the same directory
+    # Read questions from config directory
     try:
-        with open("questions.txt", encoding="utf-8") as f:
+        with open("config/questions.txt", encoding="utf-8") as f:
             questions = [q.strip() for q in f.read().splitlines() if q.strip()]
     except FileNotFoundError:
-        print("Error: questions.txt not found. Please create it with questions to ask.")
+        print("Error: config/questions.txt not found. Please create it with questions to ask.")
         return
 
     if not questions:
-        print("No questions found in questions.txt. Exiting.")
+        print("No questions found in config/questions.txt. Exiting.")
         return
 
     all_answers = []
