@@ -1,14 +1,14 @@
 # fuGPT: AI-Powered Code Analysis Tool (AST-Enhanced)
 
-A powerful tool for automated code analysis using Retrieval-Augmented Generation (RAG) with LLMs, enhanced with Abstract Syntax Tree (AST)-based chunking for precise and contextually relevant code analysis.
+A tool for automated code analysis using Retrieval-Augmented Generation (RAG) with LLMs, enhanced with Abstract Syntax Tree (AST)-based chunking for precise and contextually relevant code analysis.
 
 ## Key Features
 
 - **AST-Based Semantic Chunking**: Extracts complete semantic units (functions, classes, methods) rather than arbitrary text fragments
 - **Advanced Retrieval Pipeline**: Hybrid search combining semantic embeddings, keyword search (BM25), and cross-encoder reranking
-- **Multi-Language Support**: Python, JavaScript, Java, C++ with extensible architecture
+- **Multi-Language Support**: Python, JavaScript, Java, C++, Kotlin with extensible architecture
 - **HyDE Enhancement**: Optional Hypothetical Document Embeddings for improved query understanding
-- **Comprehensive Analysis**: Expert-level code evaluation with detailed reports
+- **Comprehensive Analysis**: Code evaluation with detailed reports
 
 ## Modern Development Environment
 
@@ -55,6 +55,7 @@ uv sync --extra dev
    ```
 
 3. **Configure OpenAI API** (required for embeddings):
+
    ```bash
    export OPENAI_API_KEY="your-api-key-here"
    ```
@@ -144,19 +145,19 @@ chunk_metadata = {
 
 ### 2. Dual Storage Architecture
 
-**SQLite Database**: Rich metadata storage
+**SQLite Database**: Rich metadata storage for both code and documentation
 
 ```sql
 CREATE TABLE chunks (
     id TEXT PRIMARY KEY,           -- "filepath:start_byte:end_byte"
-    file_path TEXT,               -- "src/utils.py"
-    language TEXT,                -- "python"
-    node_type TEXT,               -- "function_definition"
+    file_path TEXT,               -- "src/utils.py" or "README.md"
+    language TEXT,                -- "python" or "markdown"
+    node_type TEXT,               -- "function_definition" or "markdown_section"
     start_line INTEGER,           -- 45
     end_line INTEGER,             -- 67
     start_byte INTEGER,           -- 1234
     end_byte INTEGER,             -- 1890
-    code TEXT,                    -- Full function/class code
+    code TEXT,                    -- Full function/class code or doc section
     embedding_id INTEGER          -- Link to vector index
 );
 ```
@@ -171,10 +172,30 @@ labels, distances = hnsw_index.knn_query(query_embedding, k=15)
 
 ### 3. Advanced Hybrid Retrieval Pipeline
 
-#### Step 1: HyDE (Hypothetical Document Embeddings)
+#### Documentation vs Code Handling
+
+**Documentation files** (.md, .txt, .rst) are embedded differently from code:
+
+- **No AST parsing**: Documentation is chunked by headers/sections rather than syntax
+- **No HyDE enhancement**: Documentation queries skip HyDE for better direct text matching
+- **Specialized boosting**: README and doc files get relevance boosts during reranking
 
 ```python
-# Generate hypothetical code to bridge query-code gap
+# Documentation query detection and handling
+doc_keywords = ["readme", "documentation", "docs", "setup", "install", ...]
+is_doc_query = any(keyword in query.lower() for keyword in doc_keywords)
+
+if is_doc_query and USE_HYDE:
+    print("Documentation query detected - skipping HyDE for better direct matching")
+    search_text = query  # Use original query, not HyDE
+else:
+    search_text = generate_hypothetical_document(query)  # Use HyDE for code queries
+```
+
+#### Step 1: HyDE (Hypothetical Document Embeddings) - Code Only
+
+```python
+# Generate hypothetical code to bridge query-code gap (skipped for documentation queries)
 hyde_prompt = f"Write ideal code that would answer: {query}"
 hypothetical_code = llm_generate(hyde_prompt)
 enhanced_query_embedding = embed_model.embed(hypothetical_code)
@@ -202,13 +223,23 @@ bm25_scores = bm25_index.get_scores(tokenized_query)
 combined_results = merge_and_deduplicate(semantic_results, bm25_results)
 ```
 
-#### Step 5: Cross-Encoder Reranking
+#### Step 5: Cross-Encoder Reranking with Documentation Boosting
 
 ```python
-# Precise relevance scoring
+# Precise relevance scoring with special handling for documentation
 reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 rerank_pairs = [[query, chunk["code"]] for chunk in candidates]
-final_scores = reranker.predict(rerank_pairs)
+rerank_scores = reranker.predict(rerank_pairs)
+
+# Apply heuristic boosts for documentation queries
+documentation_keywords = ["readme", "documentation", "docs", "setup", "install"]
+if any(keyword in query.lower() for keyword in documentation_keywords):
+    for i, chunk in enumerate(candidates):
+        # Boost README and documentation files
+        if (chunk["file_path"].lower() in ["readme.md", "readme.txt"] or
+            chunk["language"] == "markdown" or
+            "readme" in chunk["file_path"].lower()):
+            rerank_scores[i] += 2.0  # Significant boost
 ```
 
 ### 4. Complete Analysis Workflow
@@ -383,10 +414,6 @@ make dev
 git commit -m "Your changes"
 ```
 
-## License
-
-[Insert license information here]
-
 ## Support
 
 For issues, questions, or contributions:
@@ -396,5 +423,3 @@ For issues, questions, or contributions:
 - Submit pull requests
 
 ---
-
-**fuGPT** represents a significant advancement in automated code analysis, combining the precision of AST-based parsing with the power of modern language models for comprehensive, context-aware code evaluation.
