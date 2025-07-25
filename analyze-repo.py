@@ -15,6 +15,8 @@ import time
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # HNSWlib import (assuming it will be installed in the target environment)
+from typing import Any, Optional
+
 import hnswlib
 import llm
 import sqlite_utils
@@ -41,7 +43,9 @@ RERANKER_MODEL_NAME = (
 
 # HyDE configuration
 USE_HYDE = True  # Set to False to disable HyDE
-HYDE_LLM_MODEL_ID = "gpt-4o-mini"  # A fast OpenAI LLM for generating hypothetical documents
+HYDE_LLM_MODEL_ID = (
+    "gpt-4o-mini"  # A fast OpenAI LLM for generating hypothetical documents
+)
 # Or use a specific llm library model if not using shell command for HyDE
 
 # Retrieval parameters
@@ -53,16 +57,18 @@ MAX_CHARS_PER_CHUNK_IN_CONTEXT = (
 )
 
 # --- Global Variables --- (Load models once)
-query_embed_model = None
-hnsw_index = None
-chunks_db = None
-reranker_model = None
-bm25_corpus = []
-bm25_index = None
-all_db_chunks = []  # To store all chunks from DB for BM25 and metadata lookup
+query_embed_model: Optional[Any] = None
+hnsw_index: Optional[hnswlib.Index] = None
+chunks_db: Optional[sqlite_utils.Database] = None
+reranker_model: Optional[CrossEncoder] = None
+bm25_corpus: list[str] = []
+bm25_index: Optional[BM25Okapi] = None
+all_db_chunks: list[
+    dict[str, Any]
+] = []  # To store all chunks from DB for BM25 and metadata lookup
 
 
-def initialize_models_and_data():
+def initialize_models_and_data() -> None:
     """Load models, HNSW index, and SQLite data once."""
     global \
         query_embed_model, \
@@ -152,7 +158,7 @@ def initialize_models_and_data():
 
 
 # Function to generate hypothetical document (HyDE)
-def generate_hypothetical_document(query):
+def generate_hypothetical_document(query: str) -> str:
     if not USE_HYDE:
         return query  # Return original query if HyDE is disabled
 
@@ -194,13 +200,35 @@ def generate_hypothetical_document(query):
 
 
 # Function to get relevant code chunks
-def get_relevant_chunks(query):
+def get_relevant_chunks(query: str) -> list[dict[str, Any]]:
     if not hnsw_index or not query_embed_model or not all_db_chunks:
         print("Error: Models or data not initialized properly.")
         return []
 
     # 1. (Optional) HyDE: Generate hypothetical document and embed it
-    search_text = generate_hypothetical_document(query)
+    # Check if this is a documentation-related query
+    doc_keywords = [
+        "readme",
+        "documentation",
+        "docs",
+        "setup",
+        "install",
+        "getting started",
+        "guide",
+        "tutorial",
+        "help",
+        "usage",
+        "configuration",
+        "how to",
+    ]
+    is_doc_query = any(keyword in query.lower() for keyword in doc_keywords)
+
+    if is_doc_query and USE_HYDE:
+        print("Documentation query detected - skipping HyDE for better direct matching")
+        search_text = query
+    else:
+        search_text = generate_hypothetical_document(query)
+
     query_embedding = list(query_embed_model.embed(search_text))
 
     # 2. Semantic Search (HNSWlib)
@@ -257,20 +285,33 @@ def get_relevant_chunks(query):
             [query, chunk["code"]] for chunk in candidate_chunks_for_reranking
         ]
         rerank_scores = reranker_model.predict(rerank_pairs)
-        
+
         # Apply heuristic boosts for documentation queries
-        documentation_keywords = ["readme", "documentation", "docs", "setup", "install", "getting started"]
+        documentation_keywords = [
+            "readme",
+            "documentation",
+            "docs",
+            "setup",
+            "install",
+            "getting started",
+        ]
         if any(keyword in query.lower() for keyword in documentation_keywords):
             for i, chunk in enumerate(candidate_chunks_for_reranking):
                 # Boost README and other documentation files
-                if chunk["file_path"].lower() in ["readme.md", "readme.txt", "docs.md"] or \
-                   chunk["language"] == "markdown" or \
-                   "readme" in chunk["file_path"].lower():
+                if (
+                    chunk["file_path"].lower() in ["readme.md", "readme.txt", "docs.md"]
+                    or chunk["language"] == "markdown"
+                    or "readme" in chunk["file_path"].lower()
+                ):
                     rerank_scores[i] += 2.0  # Significant boost for documentation files
                     print(f"Boosted documentation file: {chunk['file_path']}")
                 # Boost other common documentation patterns
-                elif chunk["file_path"].lower().endswith((".md", ".txt", ".rst")) and \
-                     any(doc_word in chunk["file_path"].lower() for doc_word in ["doc", "guide", "help", "install"]):
+                elif chunk["file_path"].lower().endswith(
+                    (".md", ".txt", ".rst")
+                ) and any(
+                    doc_word in chunk["file_path"].lower()
+                    for doc_word in ["doc", "guide", "help", "install"]
+                ):
                     rerank_scores[i] += 1.0  # Moderate boost for other doc files
 
         # Sort chunks by reranker scores
@@ -294,7 +335,7 @@ def get_relevant_chunks(query):
 
 
 # Function to query the LLM with a question and context
-def ask_about_codebase(question, aspect_for_retrieval):
+def ask_about_codebase(question: str, aspect_for_retrieval: str) -> str:
     retrieved_chunks = get_relevant_chunks(aspect_for_retrieval)
 
     if not retrieved_chunks:
@@ -338,9 +379,7 @@ def ask_about_codebase(question, aspect_for_retrieval):
 
     # Execute the LLM query using shell command (as in original script)
     # Ensure the LLM model used here is powerful enough for analysis
-    llm_model_for_analysis = (
-        "gpt-4o"  # Using OpenAI's GPT-4 for analysis
-    )
+    llm_model_for_analysis = "gpt-4o"  # Using OpenAI's GPT-4 for analysis
     print(f"Asking LLM ({llm_model_for_analysis}): {question[:60]}...")
     shell_cmd = (
         f"cat {temp_file_path} | llm -m {llm_model_for_analysis} > {output_file_path}"
@@ -363,7 +402,7 @@ def ask_about_codebase(question, aspect_for_retrieval):
             os.remove(temp_file_path)
 
 
-def main():
+def main() -> None:
     try:
         initialize_models_and_data()
     except Exception as e:
@@ -375,7 +414,9 @@ def main():
         with open("config/questions.txt", encoding="utf-8") as f:
             questions = [q.strip() for q in f.read().splitlines() if q.strip()]
     except FileNotFoundError:
-        print("Error: config/questions.txt not found. Please create it with questions to ask.")
+        print(
+            "Error: config/questions.txt not found. Please create it with questions to ask."
+        )
         return
 
     if not questions:
